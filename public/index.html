@@ -3,12 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stacje klimatyczne NOAA - Proxy</title>
-    <link rel="stylesheet" href="style.css"/>
+    <title>Dane NOAA - Stacje i Zbiory Danych</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        input[type="text"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+            cursor: pointer;
+        }
+        th:hover {
+            background-color: #2c3e50;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .loading, .error, .stats {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .stats {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .api-section {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Stacje klimatyczne NOAA</h1>
+        <h1>Dane klimatyczne NOAA</h1>
         
         <div class="api-section">
             <h3>Status: Połączono z lokalnym proxy</h3>
@@ -16,264 +105,301 @@
         </div>
 
         <div class="controls">
-            <button onclick="loadStations()" id="loadBtn">Załaduj stacje</button>
-            <div>
-                <input type="text" id="searchInput" placeholder="Wyszukaj stację..." onkeyup="filterStations()">
+            <button onclick="loadStations()" id="loadStationsBtn">Załaduj stacje</button>
+            <button onclick="loadDatasets()" id="loadDatasetsBtn">Załaduj zbiory danych</button>
+            <button onclick="loadDataCategories()" id="loadDataCategoriesBtn">Załaduj kategorie danych</button>
+            
+            <div style="margin-top: 10px;">
+                <input type="text" id="searchInput" placeholder="Wyszukaj..." onkeyup="filterData()">
                 <button onclick="clearSearch()">Wyczyść</button>
             </div>
         </div>
 
         <div id="stats" class="stats" style="display: none;"></div>
-        <div id="loading" class="loading" style="display: none;">Ładowanie danych stacji...</div>
+        <div id="loading" class="loading" style="display: none;">Ładowanie danych...</div>
         <div id="error" class="error" style="display: none;"></div>
 
-        <div id="tableContainer" style="display: none;">
+        <!-- STATIONS TABLE -->
+        <div id="stationsContainer" style="display: none;">
+            <h2>Stacje klimatyczne</h2>
             <table id="stationsTable">
                 <thead>
                     <tr>
-                        <th onclick="sortTable(0)">Station ID</th>
-                        <th onclick="sortTable(1)">Name</th>
-                        <th onclick="sortTable(2)">State</th>
-                        <th onclick="sortTable(3)">Latitude</th>
-                        <th onclick="sortTable(4)">Longitude</th>
+                        <th onclick="sortTable('stations',0)">Station ID</th>
+                        <th onclick="sortTable('stations',1)">Name</th>
+                        <th onclick="sortTable('stations',2)">State</th>
+                        <th onclick="sortTable('stations',3)">Latitude</th>
+                        <th onclick="sortTable('stations',4)">Longitude</th>
                     </tr>
                 </thead>
-                <tbody id="tableBody">
-                </tbody>
+                <tbody id="stationsBody"></tbody>
             </table>
-            
-            <div class="pagination">
-                <button onclick="previousPage()" id="prevBtn" disabled>Poprzednia</button>
-                <span id="pageInfo">Strona 1 z 1</span>
-                <button onclick="nextPage()" id="nextBtn" disabled>Następna</button>
-            </div>
+        </div>
+
+        <!-- DATASETS TABLE -->
+        <div id="datasetsContainer" style="display: none;">
+            <h2>Zbiory Danych NOAA</h2>
+            <table id="datasetsTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('datasets',0)">ID</th>
+                        <th onclick="sortTable('datasets',1)">Nazwa</th>
+                        <th onclick="sortTable('datasets',2)">Pokrycie danych</th>
+                        <th onclick="sortTable('datasets',3)">ID Min Data</th>
+                        <th onclick="sortTable('datasets',4)">ID Max Data</th>
+                    </tr>
+                </thead>
+                <tbody id="datasetsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- DATA CATEGORIES TABLE -->
+        <div id="dataCategoriesContainer" style="display: none;">
+            <h2>Kategorie Danych NOAA</h2>
+            <table id="dataCategoriesTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('datacategories',0)">ID</th>
+                        <th onclick="sortTable('datacategories',1)">Nazwa</th>
+                    </tr>
+                </thead>
+                <tbody id="dataCategoriesBody"></tbody>
+            </table>
         </div>
     </div>
 
     <script>
         const PROXY_API_BASE = 'http://localhost:3000/api';
-        
-        let allStations = [];
-        let currentStations = [];
-        let currentPage = 1;
-        const itemsPerPage = 50;
+        let allStations = [], allDatasets = [], allDataCategories = [];
+        let currentType = ''; // "stations", "datasets" lub "datacategories"
+        let currentData = [];
         let currentSortColumn = -1;
         let sortDirection = 1;
 
         async function loadStations() {
-            showLoading();
+            currentType = 'stations';
+            showLoading('Ładowanie danych stacji...');
             hideError();
-            hideTable();
+            hideAllTables();
 
             try {
-                let allData = [];
-                let offset = 0;
-                const limit = 100;
+                const response = await fetch(`${PROXY_API_BASE}/stations?limit=100`);
+                if (!response.ok) throw new Error(`Błąd HTTP: ${response.status}`);
+                const data = await response.json();
 
-                // Pobieranie danych przez lokalny proxy
-                while (true) {
-                    const url = `${PROXY_API_BASE}/stations?limit=${limit}&offset=${offset}`;
-                    
-                    console.log('Pobieranie przez proxy:', url);
-                    
-                    const response = await fetch(url);
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.details || `Błąd HTTP: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (!data.results || data.results.length === 0) {
-                        break;
-                    }
-
-                    allData = allData.concat(data.results);
-                    offset += limit;
-
-                    // Aktualizacja postępu
-                    document.getElementById('loading').textContent = 
-                        `Ładowanie danych stacji... Pobrano ${allData.length} rekordów`;
-
-                    // Bezpieczne przerwanie po rozsądnej liczbie rekordów
-                    if (allData.length >= 1000) {
-                        document.getElementById('loading').textContent += 
-                            ` (zatrzymano na ${allData.length} rekordach dla wydajności)`;
-                        break;
-                    }
-
-                    // Krótka przerwa między żądaniami
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                if (!data.results) {
+                    throw new Error('Brak danych stacji w odpowiedzi');
                 }
 
-                if (allData.length === 0) {
-                    throw new Error('Nie udało się pobrać żadnych danych stacji. Sprawdź czy serwer proxy działa.');
-                }
-
-                allStations = allData.map(station => ({
-                    id: station.id || 'Brak',
-                    name: station.name || 'Brak',
-                    state: station.state || 'Brak',
-                    latitude: station.latitude || 'Brak',
-                    longitude: station.longitude || 'Brak'
+                allStations = data.results.map(s => ({
+                    id: s.id || 'Brak',
+                    name: s.name || 'Brak',
+                    state: s.state || 'Brak',
+                    latitude: s.latitude || 'Brak',
+                    longitude: s.longitude || 'Brak'
                 }));
 
-                currentStations = [...allStations];
+                currentData = [...allStations];
                 displayStations();
-                updateStats();
+                updateStats('stacje', allStations.length);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                hideLoading();
+            }
+        }
 
-            } catch (error) {
-                showError('Błąd podczas pobierania danych: ' + error.message);
-                console.error('Szczegóły błędu:', error);
+        async function loadDatasets() {
+            currentType = 'datasets';
+            showLoading('Ładowanie zbiorów danych...');
+            hideError();
+            hideAllTables();
+
+            try {
+                const response = await fetch(`${PROXY_API_BASE}/datasets?limit=100`);
+                if (!response.ok) throw new Error(`Błąd HTTP: ${response.status}`);
+                const data = await response.json();
+
+                if (!data.results) {
+                    throw new Error('Brak danych zbiorów w odpowiedzi');
+                }
+
+                allDatasets = data.results.map(ds => ({
+                    id: ds.id || 'Brak',
+                    name: ds.name || 'Brak',
+                    datacoverage: ds.datacoverage || 'Brak',
+                    mindate: ds.mindate || 'Brak',
+                    maxdate: ds.maxdate || 'Brak'
+                }));
+
+                currentData = [...allDatasets];
+                displayDatasets();
+                updateStats('zbiory danych', allDatasets.length);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function loadDataCategories() {
+            currentType = 'datacategories';
+            showLoading('Ładowanie kategorii danych...');
+            hideError();
+            hideAllTables();
+
+            try {
+                const response = await fetch(`${PROXY_API_BASE}/datacategories?limit=100`);
+                if (!response.ok) throw new Error(`Błąd HTTP: ${response.status}`);
+                const data = await response.json();
+
+                if (!data.results) {
+                    throw new Error('Brak danych kategorii w odpowiedzi');
+                }
+
+                allDataCategories = data.results.map(dc => ({
+                    id: dc.id || 'Brak',
+                    name: dc.name || 'Brak'
+                }));
+
+                currentData = [...allDataCategories];
+                displayDataCategories();
+                updateStats('kategorie danych', allDataCategories.length);
+            } catch (err) {
+                showError(err.message);
             } finally {
                 hideLoading();
             }
         }
 
         function displayStations() {
-            const tableBody = document.getElementById('tableBody');
-            tableBody.innerHTML = '';
-
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const endIndex = startIndex + itemsPerPage;
-            const pageStations = currentStations.slice(startIndex, endIndex);
-
-            pageStations.forEach(station => {
-                const row = document.createElement('tr');
-                
-                const idCell = document.createElement('td');
-                idCell.textContent = station.id;
-                
-                const nameCell = document.createElement('td');
-                nameCell.textContent = station.name;
-                
-                const stateCell = document.createElement('td');
-                stateCell.textContent = station.state;
-                
-                const latCell = document.createElement('td');
-                latCell.textContent = station.latitude;
-                
-                const lonCell = document.createElement('td');
-                lonCell.textContent = station.longitude;
-                
-                row.appendChild(idCell);
-                row.appendChild(nameCell);
-                row.appendChild(stateCell);
-                row.appendChild(latCell);
-                row.appendChild(lonCell);
-                
-                tableBody.appendChild(row);
+            const body = document.getElementById('stationsBody');
+            body.innerHTML = '';
+            currentData.forEach(s => {
+                const row = `<tr>
+                    <td>${s.id}</td>
+                    <td>${s.name}</td>
+                    <td>${s.state}</td>
+                    <td>${s.latitude}</td>
+                    <td>${s.longitude}</td>
+                </tr>`;
+                body.insertAdjacentHTML('beforeend', row);
             });
-
-            updatePagination();
-            showTable();
+            document.getElementById('stationsContainer').style.display = 'block';
         }
 
-        function filterStations() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
-            if (searchTerm === '') {
-                currentStations = [...allStations];
-            } else {
-                currentStations = allStations.filter(station => 
-                    station.id.toLowerCase().includes(searchTerm) ||
-                    station.name.toLowerCase().includes(searchTerm) ||
-                    station.state.toLowerCase().includes(searchTerm)
+        function displayDatasets() {
+            const body = document.getElementById('datasetsBody');
+            body.innerHTML = '';
+            currentData.forEach(ds => {
+                const row = `<tr>
+                    <td>${ds.id}</td>
+                    <td>${ds.name}</td>
+                    <td>${ds.datacoverage}</td>
+                    <td>${ds.mindate}</td>
+                    <td>${ds.maxdate}</td>
+                </tr>`;
+                body.insertAdjacentHTML('beforeend', row);
+            });
+            document.getElementById('datasetsContainer').style.display = 'block';
+        }
+
+        function displayDataCategories() {
+            const body = document.getElementById('dataCategoriesBody');
+            body.innerHTML = '';
+            currentData.forEach(dc => {
+                const row = `<tr>
+                    <td>${dc.id}</td>
+                    <td>${dc.name}</td>
+                </tr>`;
+                body.insertAdjacentHTML('beforeend', row);
+            });
+            document.getElementById('dataCategoriesContainer').style.display = 'block';
+        }
+
+        function filterData() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            if (currentType === 'stations') {
+                currentData = allStations.filter(s => 
+                    s.id.toLowerCase().includes(term) ||
+                    s.name.toLowerCase().includes(term) ||
+                    s.state.toLowerCase().includes(term)
                 );
+                displayStations();
+            } else if (currentType === 'datasets') {
+                currentData = allDatasets.filter(ds => 
+                    ds.id.toLowerCase().includes(term) ||
+                    ds.name.toLowerCase().includes(term)
+                );
+                displayDatasets();
+            } else if (currentType === 'datacategories') {
+                currentData = allDataCategories.filter(dc => 
+                    dc.id.toLowerCase().includes(term) ||
+                    dc.name.toLowerCase().includes(term)
+                );
+                displayDataCategories();
             }
-            
-            currentPage = 1;
-            displayStations();
-            updateStats();
         }
 
         function clearSearch() {
             document.getElementById('searchInput').value = '';
-            filterStations();
+            filterData();
         }
 
-        function sortTable(columnIndex) {
+        function sortTable(type, columnIndex) {
             if (currentSortColumn === columnIndex) {
-                sortDirection = -sortDirection;
+                sortDirection *= -1;
             } else {
                 currentSortColumn = columnIndex;
                 sortDirection = 1;
             }
 
-            currentStations.sort((a, b) => {
-                const aValue = Object.values(a)[columnIndex];
-                const bValue = Object.values(b)[columnIndex];
-                
-                if (aValue === 'Brak' && bValue === 'Brak') return 0;
-                if (aValue === 'Brak') return 1;
-                if (bValue === 'Brak') return -1;
-                
-                if (typeof aValue === 'string' && typeof bValue === 'string') {
-                    return aValue.localeCompare(bValue) * sortDirection;
-                }
-                
-                return (aValue - bValue) * sortDirection;
+            const key = Object.keys(currentData[0])[columnIndex];
+            currentData.sort((a, b) => {
+                const av = a[key] ?? '';
+                const bv = b[key] ?? '';
+                return av.toString().localeCompare(bv.toString()) * sortDirection;
             });
 
-            displayStations();
-        }
-
-        function updatePagination() {
-            const totalPages = Math.ceil(currentStations.length / itemsPerPage);
-            document.getElementById('pageInfo').textContent = `Strona ${currentPage} z ${totalPages}`;
-            
-            document.getElementById('prevBtn').disabled = currentPage === 1;
-            document.getElementById('nextBtn').disabled = currentPage === totalPages || totalPages === 0;
-        }
-
-        function previousPage() {
-            if (currentPage > 1) {
-                currentPage--;
+            if (type === 'stations') {
                 displayStations();
+            } else if (type === 'datasets') {
+                displayDatasets();
+            } else if (type === 'datacategories') {
+                displayDataCategories();
             }
         }
 
-        function nextPage() {
-            const totalPages = Math.ceil(currentStations.length / itemsPerPage);
-            if (currentPage < totalPages) {
-                currentPage++;
-                displayStations();
-            }
-        }
-
-        function updateStats() {
-            const statsElement = document.getElementById('stats');
-            statsElement.textContent = `Znaleziono ${currentStations.length} stacji (${allStations.length} wszystkich)`;
-            statsElement.style.display = 'block';
-        }
-
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loadBtn').disabled = true;
+        function showLoading(msg) {
+            const el = document.getElementById('loading');
+            el.textContent = msg;
+            el.style.display = 'block';
         }
 
         function hideLoading() {
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('loadBtn').disabled = false;
         }
 
-        function showError(message) {
-            const errorElement = document.getElementById('error');
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = '❌ ' + msg;
+            el.style.display = 'block';
         }
 
         function hideError() {
             document.getElementById('error').style.display = 'none';
         }
 
-        function showTable() {
-            document.getElementById('tableContainer').style.display = 'block';
+        function hideAllTables() {
+            document.getElementById('stationsContainer').style.display = 'none';
+            document.getElementById('datasetsContainer').style.display = 'none';
+            document.getElementById('dataCategoriesContainer').style.display = 'none';
         }
 
-        function hideTable() {
-            document.getElementById('tableContainer').style.display = 'none';
+        function updateStats(label, count) {
+            const el = document.getElementById('stats');
+            el.textContent = `Załadowano ${count} rekordów (${label})`;
+            el.style.display = 'block';
         }
     </script>
 </body>
