@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stacje klimatyczne NOAA - Proxy</title>
+    <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+    <div class="container">
+        <h1>Stacje klimatyczne NOAA</h1>
+        
+        <div class="api-section">
+            <h3>Status: Połączono z lokalnym proxy</h3>
+            <p>Serwer proxy działa na localhost:3000</p>
+        </div>
+
+        <div class="controls">
+            <button onclick="loadStations()" id="loadBtn">Załaduj stacje</button>
+            <div>
+                <input type="text" id="searchInput" placeholder="Wyszukaj stację..." onkeyup="filterStations()">
+                <button onclick="clearSearch()">Wyczyść</button>
+            </div>
+        </div>
+
+        <div id="stats" class="stats" style="display: none;"></div>
+        <div id="loading" class="loading" style="display: none;">Ładowanie danych stacji...</div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="tableContainer" style="display: none;">
+            <table id="stationsTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Station ID</th>
+                        <th onclick="sortTable(1)">Name</th>
+                        <th onclick="sortTable(2)">State</th>
+                        <th onclick="sortTable(3)">Latitude</th>
+                        <th onclick="sortTable(4)">Longitude</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+            
+            <div class="pagination">
+                <button onclick="previousPage()" id="prevBtn" disabled>Poprzednia</button>
+                <span id="pageInfo">Strona 1 z 1</span>
+                <button onclick="nextPage()" id="nextBtn" disabled>Następna</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PROXY_API_BASE = 'http://localhost:3000/api';
+        
+        let allStations = [];
+        let currentStations = [];
+        let currentPage = 1;
+        const itemsPerPage = 50;
+        let currentSortColumn = -1;
+        let sortDirection = 1;
+
+        async function loadStations() {
+            showLoading();
+            hideError();
+            hideTable();
+
+            try {
+                let allData = [];
+                let offset = 0;
+                const limit = 100;
+
+                // Pobieranie danych przez lokalny proxy
+                while (true) {
+                    const url = `${PROXY_API_BASE}/stations?limit=${limit}&offset=${offset}`;
+                    
+                    console.log('Pobieranie przez proxy:', url);
+                    
+                    const response = await fetch(url);
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.details || `Błąd HTTP: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (!data.results || data.results.length === 0) {
+                        break;
+                    }
+
+                    allData = allData.concat(data.results);
+                    offset += limit;
+
+                    // Aktualizacja postępu
+                    document.getElementById('loading').textContent = 
+                        `Ładowanie danych stacji... Pobrano ${allData.length} rekordów`;
+
+                    // Bezpieczne przerwanie po rozsądnej liczbie rekordów
+                    if (allData.length >= 1000) {
+                        document.getElementById('loading').textContent += 
+                            ` (zatrzymano na ${allData.length} rekordach dla wydajności)`;
+                        break;
+                    }
+
+                    // Krótka przerwa między żądaniami
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                if (allData.length === 0) {
+                    throw new Error('Nie udało się pobrać żadnych danych stacji. Sprawdź czy serwer proxy działa.');
+                }
+
+                allStations = allData.map(station => ({
+                    id: station.id || 'Brak',
+                    name: station.name || 'Brak',
+                    state: station.state || 'Brak',
+                    latitude: station.latitude || 'Brak',
+                    longitude: station.longitude || 'Brak'
+                }));
+
+                currentStations = [...allStations];
+                displayStations();
+                updateStats();
+
+            } catch (error) {
+                showError('Błąd podczas pobierania danych: ' + error.message);
+                console.error('Szczegóły błędu:', error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayStations() {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageStations = currentStations.slice(startIndex, endIndex);
+
+            pageStations.forEach(station => {
+                const row = document.createElement('tr');
+                
+                const idCell = document.createElement('td');
+                idCell.textContent = station.id;
+                
+                const nameCell = document.createElement('td');
+                nameCell.textContent = station.name;
+                
+                const stateCell = document.createElement('td');
+                stateCell.textContent = station.state;
+                
+                const latCell = document.createElement('td');
+                latCell.textContent = station.latitude;
+                
+                const lonCell = document.createElement('td');
+                lonCell.textContent = station.longitude;
+                
+                row.appendChild(idCell);
+                row.appendChild(nameCell);
+                row.appendChild(stateCell);
+                row.appendChild(latCell);
+                row.appendChild(lonCell);
+                
+                tableBody.appendChild(row);
+            });
+
+            updatePagination();
+            showTable();
+        }
+
+        function filterStations() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (searchTerm === '') {
+                currentStations = [...allStations];
+            } else {
+                currentStations = allStations.filter(station => 
+                    station.id.toLowerCase().includes(searchTerm) ||
+                    station.name.toLowerCase().includes(searchTerm) ||
+                    station.state.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            currentPage = 1;
+            displayStations();
+            updateStats();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterStations();
+        }
+
+        function sortTable(columnIndex) {
+            if (currentSortColumn === columnIndex) {
+                sortDirection = -sortDirection;
+            } else {
+                currentSortColumn = columnIndex;
+                sortDirection = 1;
+            }
+
+            currentStations.sort((a, b) => {
+                const aValue = Object.values(a)[columnIndex];
+                const bValue = Object.values(b)[columnIndex];
+                
+                if (aValue === 'Brak' && bValue === 'Brak') return 0;
+                if (aValue === 'Brak') return 1;
+                if (bValue === 'Brak') return -1;
+                
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    return aValue.localeCompare(bValue) * sortDirection;
+                }
+                
+                return (aValue - bValue) * sortDirection;
+            });
+
+            displayStations();
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(currentStations.length / itemsPerPage);
+            document.getElementById('pageInfo').textContent = `Strona ${currentPage} z ${totalPages}`;
+            
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayStations();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(currentStations.length / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayStations();
+            }
+        }
+
+        function updateStats() {
+            const statsElement = document.getElementById('stats');
+            statsElement.textContent = `Znaleziono ${currentStations.length} stacji (${allStations.length} wszystkich)`;
+            statsElement.style.display = 'block';
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loadBtn').disabled = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('loadBtn').disabled = false;
+        }
+
+        function showError(message) {
+            const errorElement = document.getElementById('error');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function showTable() {
+            document.getElementById('tableContainer').style.display = 'block';
+        }
+
+        function hideTable() {
+            document.getElementById('tableContainer').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
